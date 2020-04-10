@@ -4,8 +4,8 @@ way.
 """
 
 import numpy as np
-from RLConn import network_sim
 from RLConn import neural_params as n_params
+from RLConn import connectome_utils
 
 class ProblemDefinition():
     def __init__(self, N, m1_target, m2_target, directionality, input_vec):
@@ -17,14 +17,11 @@ class ProblemDefinition():
         self.input_vec = input_vec
 
 np.random.seed(10)
-"""
-# TODO: Get the network_sim import to work.
-network_dict = network_sim.generate_random_network(
-    N = N,
+network_dict = connectome_utils.generate_random_network(
+    N = 4,
     n_inhibitory = 1,
     max_degree = 10
 )
-"""
 
 # Stimulus just to the second neuron.
 input_vec = np.zeros(4)
@@ -35,8 +32,7 @@ FOUR_NEURON_OSCILLATION = ProblemDefinition(
     N = 4,
     m1_target = n_params.m1_target,
     m2_target = n_params.m2_target,
-    # TODO: # network_dict['directionality'],
-    # TODO: Add initial guesses from noised-up true parameters?
-    directionality = np.zeros(4),
+    # TODO: Add initial guesses from noised-up true parameters. Punted to final phase.
+    directionality =  network_dict['directionality'],
     input_vec =  input_vec
 )
