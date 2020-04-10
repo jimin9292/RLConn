@@ -93,7 +93,7 @@ def train_network(epochs = False):
 
 
 def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mask, \
-    custom_initcond = False, ablation_type = "all"):
+    custom_initcond = False, ablation_type = "all", verbose=True):
 
     np.random.seed(10)
 
@@ -156,8 +156,7 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
 
         k += 1
 
-        if k in progress_milestones:
-
+        if verbose and k in progress_milestones:
             print(str(np.round((float(k) / nsteps) * 100, 1)) + '% ' + 'completed')
 
     result_dict_network = {
@@ -175,9 +174,6 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
 ####################################################################################################################################
 
 def generate_random_network(N, n_inhibitory, max_degree):
-
-    np.random.seed(10)
-
     # Synaptic
 
     Gs = np.random.randint(0, max_degree, (N,N))
