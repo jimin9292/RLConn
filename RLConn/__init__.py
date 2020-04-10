@@ -16,5 +16,6 @@ from RLConn import network_sim
 from RLConn import control_dqn
 from RLConn import utils
 from RLConn import plotting
+from RLConn import alpg
 
 # TODO: Integrate initial enviornment in global level
