@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 from RLConn import neural_params as n_params
 from RLConn import network_sim
+from RLConn import problem_definitions as problems
 
 def load_Json(filename):
 
@@ -126,10 +127,38 @@ def convert_gap_2_vec(M):
 
     M[~np.eye(M.shape[0],dtype=bool)].reshape(M.shape[0],-1)
 
+def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
+    """
+    Example usage:
+    Gg, Gs = your_model.produce()
+    mean_error, sum_error = compute_score(Gg, Gs, problems.FOUR_NEURON_OSCILLATION)
+    :return mean_error, sum_error
+    """
+    return compute_score(
+        Gg = Gg,
+        Gs = Gs,
+        E = problem_definition.directionality,
+        input_vec = problem_definition.input_vec,
+        # We are not doing any ablation.
+        ablation_mask = np.ones(problem_definition.N),
+        # How long the simulation will run for. tf stands for time_final.
+        tf = 7,
+        t_delta = 0.01,
+        # Time window to calculate error metric across.
+        cutoff_1 = 100,
+        cutoff_2 = 600,
+        m1_target = problem_definition.m1_target,
+        m2_target = problem_definition.m2_target,
+        plot_result=True,
+        verbose=verbose)
+
 def compute_score(Gg, Gs, E, 
                     input_vec, ablation_mask, 
                     tf, t_delta, cutoff_1, cutoff_2,
-                    plot_result = True):
+                    m1_target = n_params.m1_target,
+                    m2_target = n_params.m2_target,
+                    plot_result = True,
+                    verbose = True):
 
     # Construct network dict
 
@@ -150,7 +179,8 @@ def compute_score(Gg, Gs, E,
 
     network_result_dict = network_sim.run_network_constinput_RL(0, tf, t_delta, 
                                                                input_vec=input_vec,
-                                                               ablation_mask=ablation_mask)
+                                                               ablation_mask=ablation_mask,
+                                                               verbose=verbose)
 
     plt.plot(network_result_dict['v_solution'][100:, :])
 
@@ -163,9 +193,6 @@ def compute_score(Gg, Gs, E,
     m2_test = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 1]
 
     # Compute the error
-
-    m1_target = n_params.m1_target
-    m2_target = n_params.m2_target
 
     m1_diff = np.subtract(m1_target, m1_test)
     m2_diff = np.subtract(m2_target, m2_test)
