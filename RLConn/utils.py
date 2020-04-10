@@ -8,8 +8,10 @@
 import json
 import numpy as np
 import scipy.stats as spstats
+import matplotlib.pyplot as plt
 
 from RLConn import neural_params as n_params
+from RLConn import network_sim
 
 def load_Json(filename):
 
@@ -90,44 +92,12 @@ def project_v_onto_u(v, u):
     
     return projected
 
-def compute_mean_velocity(x, y):
-    
-    # directional vectors
-    
-    x_pos_components = x[:, 8] - x[:, 16]
-    y_pos_components = y[:, 8] - y[:, 16]
-    positional_vecs = np.vstack([x_pos_components, y_pos_components])[:, :-1]
-    
-    # velocity vectors
-    
-    x_vel_components = np.diff(x[:, 12])
-    y_vel_components = np.diff(y[:, 12])
-    velocity_vecs = np.vstack([x_vel_components, y_vel_components])
-    
-    projected_vel_norms = np.zeros(len(positional_vecs[0, :]))
-    
-    for k in range(len(positional_vecs[0, :])):
-        
-        projected = project_v_onto_u(velocity_vecs[:, k], positional_vecs[:, k])
-        projected_vel_norms[k] = np.linalg.norm(projected) * np.sign(np.dot(projected, positional_vecs[:, k]))
-        
-    mean_velocity = np.mean(projected_vel_norms)
-    
-    return projected_vel_norms, mean_velocity
-
 def mean_confidence_interval(data, confidence=0.99):
     a = 1.0 * np.array(data)
     n = len(a)
     m, se = np.mean(a), spstats.sem(a)
     h = se * spstats.t.ppf((1 + confidence) / 2., n-1)
     return m, m-h, m+h, h
-
-def compute_chemotaxis_index(inmask_mat, neuron_ind, ref_signal):
-    
-    stim_integral = np.sum(inmask_mat[:, neuron_ind])
-    CI = (stim_integral - ref_signal) / ref_signal
-    
-    return CI
 
 def continuous_transition_scaler(old, new, t, rate, tSwitch):
 
@@ -136,30 +106,6 @@ def continuous_transition_scaler(old, new, t, rate, tSwitch):
 def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0)) 
     return (cumsum[N:] - cumsum[:-N]) / N
-
-def compute_segment_angles(x, y):
-    
-    phi_segments = []
-
-    for k in range(len(x)):
-
-        segment_vecs = np.vstack([np.diff(x[k][::4]), np.diff(y[k][::4])]).T
-        
-        angles_list = []
-        
-        for j in range(len(segment_vecs) - 1):
-
-            v0 = segment_vecs[j]
-            v1 = segment_vecs[j+1]
-
-            angles_list.append(np.degrees(np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))))
-        
-        angles_vec = np.asarray(angles_list)
-        phi_segments.append(angles_vec)
-        
-        #print(k)
-        
-    return np.vstack(phi_segments)
 
 def compute_action_combinations(action_2_delweight_space, num_modifiable_weights):
 
@@ -179,3 +125,78 @@ def convert_syn_2_vec(M):
 def convert_gap_2_vec(M):
 
     M[~np.eye(M.shape[0],dtype=bool)].reshape(M.shape[0],-1)
+
+def compute_score(Gg, Gs, E, 
+                    input_vec, ablation_mask, 
+                    tf, t_delta, cutoff_1, cutoff_2,
+                    plot_result = True):
+
+    # Construct network dict
+
+    network_dict = {
+
+    "gap" : Gg,
+    "syn" : Gs,
+    "directionality" : E
+
+    }
+
+    # Initialize model with the network dict
+
+    network_sim.initialize_params_neural()
+    network_sim.initialize_connectivity(network_dict)
+
+    # Simulate network with given input_vec and ablation mask
+
+    network_result_dict = network_sim.run_network_constinput_RL(0, tf, t_delta, 
+                                                               input_vec=input_vec,
+                                                               ablation_mask=ablation_mask)
+
+    plt.plot(network_result_dict['v_solution'][100:, :])
+
+    # Obtain test modes using SVD 
+
+    v_solution_truncated = network_result_dict['v_solution'][100:, :]
+    u,s,v = np.linalg.svd(v_solution_truncated.T)
+
+    m1_test = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
+    m2_test = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 1]
+
+    # Compute the error
+
+    m1_target = n_params.m1_target
+    m2_target = n_params.m2_target
+
+    m1_diff = np.subtract(m1_target, m1_test)
+    m2_diff = np.subtract(m2_target, m2_test)
+
+    m_joined = np.vstack([m1_diff, m2_diff])
+    errors = np.sqrt(np.power(m_joined, 2).sum(axis = 0))
+
+    mean_error = np.mean(errors)
+    sum_error = np.sum(errors)
+
+    # Plot the target vs test
+
+    if plot_result == True:
+
+        plt.figure(figsize=(5.5,5))
+
+        plt.scatter(m1_target, m2_target, s = 0.75, color = 'black')
+        plt.scatter(m1_test, m2_test, s = 0.75, color = 'red')
+
+        plt.ylim(-25, 25)
+        plt.xlim(-25, 25)
+
+    return mean_error, sum_error
+
+
+
+
+
+
+
+
+
+
+

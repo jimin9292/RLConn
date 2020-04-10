@@ -14,9 +14,11 @@ default_dir = os.getcwd()
 if platform == 'Windows':
 
     connectome_data_dir = 'RLConn\connectome_data'
+    target_modes_dir = 'RLConn\modes_target'
 
 else:
 
     connectome_data_dir = 'RLConn/connectome_data'
+    target_modes_dir = 'RLConn/modes_target'
 
 
