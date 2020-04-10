@@ -95,6 +95,8 @@ def train_network(epochs = False):
 def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mask, \
     custom_initcond = False, ablation_type = "all"):
 
+    np.random.seed(10)
+
     assert 'params_obj_neural' in globals(), "Neural parameters and connectivity must be initialized before running the simulation"
 
     t0 = t_start
@@ -120,6 +122,7 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
     if custom_initcond == False:
 
         initcond = 10**(-4)*np.random.normal(0, 0.94, 2*params_obj_neural['N'])
+        #print(initcond)
 
     else:
 
@@ -172,6 +175,8 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
 ####################################################################################################################################
 
 def generate_random_network(N, n_inhibitory, max_degree):
+
+    np.random.seed(10)
 
     # Synaptic
 

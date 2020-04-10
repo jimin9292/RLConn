@@ -62,6 +62,13 @@ EMat_mask = np.load('artificial_E_sample.npy')
 
 os.chdir(paths.default_dir)
 
+os.chdir(paths.target_modes_dir)
+
+m1_target = np.load('m1_target.npy')
+m2_target = np.load('m2_target.npy')
+
+os.chdir(paths.default_dir)
+
 default = {
 
     "Gc" : 0.1,
