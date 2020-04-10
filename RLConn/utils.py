@@ -216,14 +216,3 @@ def compute_score(Gg, Gs, E,
         plt.xlim(-25, 25)
 
     return mean_error, sum_error
-
-
-
-
-
-
-
-
-
-
-
