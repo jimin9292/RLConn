@@ -122,7 +122,7 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
     if custom_initcond == False:
 
         initcond = 10**(-4)*np.random.normal(0, 0.94, 2*params_obj_neural['N'])
-        print(initcond)
+        #print(initcond)
 
     else:
 
@@ -175,6 +175,8 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
 ####################################################################################################################################
 
 def generate_random_network(N, n_inhibitory, max_degree):
+
+    np.random.seed(10)
 
     # Synaptic
 
