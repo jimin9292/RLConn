@@ -182,8 +182,6 @@ def compute_score(Gg, Gs, E,
                                                                ablation_mask=ablation_mask,
                                                                verbose=verbose)
 
-    plt.plot(network_result_dict['v_solution'][100:, :])
-
     # Obtain test modes using SVD 
 
     v_solution_truncated = network_result_dict['v_solution'][100:, :]
@@ -206,6 +204,7 @@ def compute_score(Gg, Gs, E,
     # Plot the target vs test
 
     if plot_result == True:
+        plt.plot(network_result_dict['v_solution'][100:, :])
 
         plt.figure(figsize=(5.5,5))
 
@@ -214,5 +213,18 @@ def compute_score(Gg, Gs, E,
 
         plt.ylim(-25, 25)
         plt.xlim(-25, 25)
+
+        num_timesamples = m1_target.shape[0]
+        timepoints = np.arange(0, num_timesamples * t_delta, t_delta)
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.plot(timepoints, m1_target, label="M1_target", c = "red", alpha = 1.0)
+        ax.plot(timepoints, m2_target, label="M2_target", c = "blue", alpha = 1.0)
+        ax.plot(timepoints, m1_test, label="M1_test", c = "orange", alpha = 0.5)
+        ax.plot(timepoints, m2_test, label="M2_test", c = "cyan", alpha = 0.5)
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Voltage")
+        ax.legend()
+        fig.suptitle("Target vs test comparison")
+
 
     return mean_error, sum_error
