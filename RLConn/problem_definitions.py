@@ -36,3 +36,14 @@ FOUR_NEURON_OSCILLATION = ProblemDefinition(
     directionality =  network_dict['directionality'],
     input_vec =  input_vec
 )
+
+# Stimulus just to the second neuron.
+# DEFINITION 2: 3 neurons that show oscillations.
+THREE_NEURON_OSCILLATION = ProblemDefinition(
+    N = 3,
+    m1_target = n_params.m1_target,
+    m2_target = n_params.m2_target,
+    # TODO: Add initial guesses from noised-up true parameters. Punted to final phase.
+    directionality =  np.array([1, 0 ,0]),
+    input_vec =  np.array([0, 0.03, 0])
+)
