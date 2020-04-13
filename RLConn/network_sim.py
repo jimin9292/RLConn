@@ -36,7 +36,7 @@ action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifia
 # epsilon = greedy
 # epsilon increment = 0.002 (500 learnings)
 
-def train_network(network_dict_init, external_params_dict, 
+def train_network(network_dict_init, external_params_dict, m1_target, m2_target, 
                     batchsize, num_epochs, err_threshold, 
                     weight_min, weight_max, plotting_period):
 
@@ -76,10 +76,10 @@ def train_network(network_dict_init, external_params_dict,
     init_err = utils.compute_score(Gg_init, Gs_init, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = n_params.m1_target,
-                                            m2_target = n_params.m2_target,
+                                            m1_target = m1_target,
+                                            m2_target = m2_target,
                                             plot_result = periodic_plotting_bool,
-                                            verbose = True)[0]
+                                            verbose = True)[1]
 
     err_list.append(init_err)
     Gg_list.append(Gg_init)
@@ -116,10 +116,10 @@ def train_network(network_dict_init, external_params_dict,
                     new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = n_params.m1_target,
-                                            m2_target = n_params.m2_target,
+                                            m1_target = m1_target,
+                                            m2_target = m2_target,
                                             plot_result = False,
-                                            verbose = True)[0]
+                                            verbose = True)[1]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -146,10 +146,10 @@ def train_network(network_dict_init, external_params_dict,
                     new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = n_params.m1_target,
-                                            m2_target = n_params.m2_target,
+                                            m1_target = m1_target,
+                                            m2_target = m2_target,
                                             plot_result = False,
-                                            verbose = True)[0]
+                                            verbose = True)[1]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -192,10 +192,10 @@ def train_network(network_dict_init, external_params_dict,
                     new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = n_params.m1_target,
-                                            m2_target = n_params.m2_target,
+                                            m1_target = m1_target,
+                                            m2_target = m2_target,
                                             plot_result = periodic_plotting_bool,
-                                            verbose = True)[0]
+                                            verbose = True)[1]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)

@@ -67,6 +67,9 @@ os.chdir(paths.target_modes_dir)
 m1_target = np.load('m1_target.npy')
 m2_target = np.load('m2_target.npy')
 
+m1_gt = np.load('m1_gt.npy')
+m2_gt = np.load('m2_gt.npy')
+
 os.chdir(paths.default_dir)
 
 default = {

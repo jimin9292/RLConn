@@ -187,8 +187,7 @@ def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
 def compute_score(Gg, Gs, E, 
                     input_vec, ablation_mask, 
                     tf, t_delta, cutoff_1, cutoff_2,
-                    m1_target = n_params.m1_target,
-                    m2_target = n_params.m2_target,
+                    m1_target, m2_target,
                     plot_result = True,
                     verbose = True):
 
@@ -247,4 +246,4 @@ def compute_score(Gg, Gs, E,
         plt.ylim(-25, 25)
         plt.xlim(-25, 25)
 
-    return mean_error, sum_error
+    return mean_error, sum_error, m1_test, m2_test
