@@ -127,7 +127,7 @@ def convert_gap_2_vec(M):
 
     M[~np.eye(M.shape[0],dtype=bool)].reshape(M.shape[0],-1)
 
-def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
+def compute_problem_score(Gg, Gs, problem_definition, plot_result = True, verbose=True):
     """
     Example usage:
     Gg, Gs = your_model.produce()
@@ -149,7 +149,7 @@ def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
         cutoff_2 = 600,
         m1_target = problem_definition.m1_target,
         m2_target = problem_definition.m2_target,
-        plot_result=True,
+        plot_result=plot_result,
         verbose=verbose)
 
 def compute_score(Gg, Gs, E, 
@@ -182,7 +182,9 @@ def compute_score(Gg, Gs, E,
                                                                ablation_mask=ablation_mask,
                                                                verbose=verbose)
 
-    plt.plot(network_result_dict['v_solution'][100:, :])
+    if plot_result == True:
+        plt.plot(network_result_dict['v_solution'][100:, :])
+        plt.show()
 
     # Obtain test modes using SVD 
 
@@ -214,6 +216,8 @@ def compute_score(Gg, Gs, E,
 
         plt.ylim(-25, 25)
         plt.xlim(-25, 25)
+
+        plt.show()
 
     return mean_error, sum_error
 
