@@ -4,17 +4,22 @@ way.
 """
 
 import numpy as np
+from RLConn import network_sim
 from RLConn import neural_params as n_params
 from RLConn import connectome_utils
 
 class ProblemDefinition():
-    def __init__(self, N, m1_target, m2_target, directionality, input_vec):
+    def __init__(self, N, m1_target, m2_target, directionality, input_vec,
+                 tf = 7, cutoff_1 = 100, cutoff_2 = 600):
         self.N = N
         # The top 2 modes of the gold dynamics to compare against.
         self.m1_target = m1_target
         self.m2_target = m2_target
         self.directionality = directionality
         self.input_vec = input_vec
+        self.tf = tf
+        self.cutoff_1 = cutoff_1
+        self.cutoff_2 = cutoff_2
 
 np.random.seed(10)
 network_dict = connectome_utils.generate_random_network(
@@ -37,13 +42,56 @@ FOUR_NEURON_OSCILLATION = ProblemDefinition(
     input_vec =  input_vec
 )
 
-# Stimulus just to the second neuron.
-# DEFINITION 2: 3 neurons that show oscillations.
-THREE_NEURON_OSCILLATION = ProblemDefinition(
-    N = 3,
-    m1_target = n_params.m1_target,
-    m2_target = n_params.m2_target,
-    # TODO: Add initial guesses from noised-up true parameters. Punted to final phase.
-    directionality =  np.array([1, 0 ,0]),
-    input_vec =  np.array([0, 0.03, 0])
-)
+def get_three_neuron_oscillation_definition():
+    N = 3
+    Gg = np.array([[0, 8, 5],
+                   [8, 0, 2],
+                   [5, 2, 0]])
+    Gs = np.array([[0, 2, 8],
+                   [7, 0, 3],
+                   [7, 7, 0]])
+    is_inhibitory = np.array([1, 0, 0])
+    input_vec = [0, 0.03, 0]
+    # We are not doing any ablation.
+    ablation_mask = np.ones(N)
+    t_delta = 0.01
+
+    # Run for 10 seconds.
+    tf = 10
+    # Note that these cutoff offsets are actually number of dt's _after_
+    # the 100 timestep truncation in compute_score.
+    cutoff_1 = 400
+    cutoff_2 = 900
+
+    network_dict = {
+        "gap": Gg,
+        "syn": Gs,
+        "directionality": is_inhibitory
+    }
+
+    # Initialize model with the network dict
+
+    network_sim.initialize_params_neural()
+    network_sim.initialize_connectivity(network_dict)
+
+    # Simulate network with given input_vec and ablation mask
+
+    network_result_dict = network_sim.run_network_constinput_RL(0, tf, t_delta,
+                                                                input_vec=input_vec,
+                                                                ablation_mask=ablation_mask,
+                                                                verbose=False)
+    # Obtain test modes using SVD
+    v_solution_truncated = network_result_dict['v_solution'][100:, :]
+    u, s, v = np.linalg.svd(v_solution_truncated.T)
+    top_mode = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
+
+    return ProblemDefinition(
+        N = 3,
+        m1_target = top_mode,
+        m2_target = None,
+        directionality =  np.array([1, 0 ,0]),
+        input_vec =  np.array([0, 0.03, 0]),
+        tf = tf,
+        cutoff_1 = cutoff_1,
+        cutoff_2 = cutoff_2
+    )

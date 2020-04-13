@@ -142,11 +142,11 @@ def compute_problem_score(Gg, Gs, problem_definition, plot_result=True, verbose=
         # We are not doing any ablation.
         ablation_mask = np.ones(problem_definition.N),
         # How long the simulation will run for. tf stands for time_final.
-        tf = 7,
+        tf = problem_definition.tf,
         t_delta = 0.01,
         # Time window to calculate error metric across.
-        cutoff_1 = 100,
-        cutoff_2 = 600,
+        cutoff_1 = problem_definition.cutoff_1,
+        cutoff_2 = problem_definition.cutoff_2,
         m1_target = problem_definition.m1_target,
         m2_target = problem_definition.m2_target,
         plot_result=plot_result,
@@ -187,13 +187,17 @@ def compute_score(Gg, Gs, E,
     v_solution_truncated = network_result_dict['v_solution'][100:, :]
     u,s,v = np.linalg.svd(v_solution_truncated.T)
 
-    m1_test = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
-    m2_test = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 1]
+    projected = np.dot(v_solution_truncated, u)
+    m1_test = projected[cutoff_1:cutoff_2, 0]
+    m2_test = projected[cutoff_1:cutoff_2, 1]
 
     # Compute the error
-
     m1_diff = np.subtract(m1_target, m1_test)
-    m2_diff = np.subtract(m2_target, m2_test)
+
+    if m2_target is None:
+        m2_diff = np.zeros(m1_diff.shape)
+    else:
+        m2_diff = np.subtract(m2_target, m2_test)
 
     m_joined = np.vstack([m1_diff, m2_diff])
     errors = np.sqrt(np.power(m_joined, 2).sum(axis = 0))
@@ -204,23 +208,25 @@ def compute_score(Gg, Gs, E,
     # Plot the target vs test
 
     if plot_result == True:
-        plt.plot(network_result_dict['v_solution'][100:, :])
 
-        plt.figure(figsize=(5.5,5))
+        if m2_target is not None:
+            plt.plot(network_result_dict['v_solution'][100:, :])
 
-        plt.scatter(m1_target, m2_target, s = 0.75, color = 'black')
-        plt.scatter(m1_test, m2_test, s = 0.75, color = 'red')
+            plt.figure(figsize=(5.5,5))
+            plt.scatter(m1_target, m2_target, s = 0.75, color = 'black')
+            plt.scatter(m1_test, m2_test, s = 0.75, color = 'red')
 
-        plt.ylim(-25, 25)
-        plt.xlim(-25, 25)
+            plt.ylim(-25, 25)
+            plt.xlim(-25, 25)
 
         num_timesamples = m1_target.shape[0]
         timepoints = np.arange(0, num_timesamples * t_delta, t_delta)
         fig, ax = plt.subplots(figsize=(10, 3))
         ax.plot(timepoints, m1_target, label="M1_target", c = "red", alpha = 1.0)
-        ax.plot(timepoints, m2_target, label="M2_target", c = "blue", alpha = 1.0)
         ax.plot(timepoints, m1_test, label="M1_test", c = "orange", alpha = 0.5)
-        ax.plot(timepoints, m2_test, label="M2_test", c = "cyan", alpha = 0.5)
+        if m2_target is not None:
+            ax.plot(timepoints, m2_target, label="M2_target", c = "blue", alpha = 1.0)
+            ax.plot(timepoints, m2_test, label="M2_test", c = "cyan", alpha = 0.5)
         ax.set_xlabel("Time")
         ax.set_ylabel("Voltage")
         ax.legend()
