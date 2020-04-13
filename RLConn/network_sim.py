@@ -58,7 +58,7 @@ def train_network(network_dict_init, external_params_dict,
 
     assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2) # N(N-1) / 2
 
-    n_features_single = (2 * num_neurons**2) + 2 # [err (1), Gg (N^2), Gs (N^2), pair_2b_modified_id (1)]
+    n_features_single = (2 * (num_neurons**2 - num_neurons)) + 2 # [err (1), Gg (N^2), Gs (N^2), pair_2b_modified_id (1)]
 
     n_actions = num_modifiable_weights**(len(del_W_space))
     n_features =  n_features_single * batchsize 
@@ -130,7 +130,7 @@ def train_network(network_dict_init, external_params_dict,
                     modified_pair_ids.append(pair_id)
 
                     observation, newest_err_diff = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
-                    print(observation)
+                    #print(observation)
                     rl_action_ind = RL.choose_action(observation)
                     action = action_2_conn_space[rl_action_ind]
 
@@ -161,12 +161,13 @@ def train_network(network_dict_init, external_params_dict,
 
                     observation_, newest_err_diff_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
 
-                    reward = compute_reward(err_list, reward_type = 'binomial')
+                    reward = compute_reward(newest_err_diff_, reward_type = 'binomial')
                     reward_list.append(reward)
 
-                    RL.store_transition(observation, action, reward, observation_)
+                    RL.store_transition(observation, rl_action_ind, reward, observation_)
 
                     observation = observation_.copy()
+                    newest_err_diff = newest_err_diff_.copy()
 
                     rl_action_ind = RL.choose_action(observation)
                     action = action_2_conn_space[rl_action_ind]
@@ -184,13 +185,13 @@ def train_network(network_dict_init, external_params_dict,
 
                         periodic_plotting_bool = True
 
-                    new_err = utils.compute_score(Gg, Gs, E, 
+                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
                                             m1_target = n_params.m1_target,
                                             m2_target = n_params.m2_target,
                                             plot_result = periodic_plotting_bool,
-                                            verbose = True)
+                                            verbose = True)[0]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -252,7 +253,7 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
     else:
 
         initcond = custom_initcond
-        print("using the custom initial condition")
+        #print("using the custom initial condition")
 
     """ Configuring the ODE Solver """
     r = integrate.ode(membrane_voltageRHS_constinput, compute_jacobian_constinput).set_integrator('vode', atol = 1e-3, min_step = dt*1e-6, method = 'bdf')
@@ -266,10 +267,10 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
     traj[0, :] = initcond[:params_obj_neural['N']]
     vthmat = np.tile(params_obj_neural['vth'], (nsteps, 1))
 
-    print("Network integration prep completed...")
+    #print("Network integration prep completed...")
 
     """ Integrate the ODE(s) across each delta_t timestep """
-    print("Computing network dynamics...")
+    #print("Computing network dynamics...")
     k = 1
 
     while r.successful() and k < nsteps:
@@ -281,8 +282,8 @@ def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mas
 
         k += 1
 
-        if verbose and k in progress_milestones:
-            print(str(np.round((float(k) / nsteps) * 100, 1)) + '% ' + 'completed')
+        #if verbose and k in progress_milestones:
+        #    print(str(np.round((float(k) / nsteps) * 100, 1)) + '% ' + 'completed')
 
     result_dict_network = {
             "t": t,
@@ -305,7 +306,7 @@ def initialize_params_neural(custom_params = False):
     if custom_params == False:
 
         params_obj_neural = n_params.default
-        print('Using the default neural parameters')
+        #print('Using the default neural parameters')
 
     else:
 
@@ -314,7 +315,7 @@ def initialize_params_neural(custom_params = False):
         if validate_custom_neural_params(custom_params) == True:
 
             params_obj_neural = custom_params
-            print('Accepted the custom neural parameters')
+            #print('Accepted the custom neural parameters')
 
 def validate_custom_neural_params(custom_params):
 
@@ -346,7 +347,7 @@ def initialize_connectivity(custom_connectivity_dict = False):
         params_obj_neural['Gs_Static'] = n_params.Gs_Static
         EMat_mask = n_params.EMat_mask
         params_obj_neural['N'] = len(n_params.Gg_Static)
-        print('Using the default connectivity')
+        #print('Using the default connectivity')
 
     else:
 
@@ -356,7 +357,7 @@ def initialize_connectivity(custom_connectivity_dict = False):
         params_obj_neural['Gs_Static'] = custom_connectivity_dict['syn']
         EMat_mask = custom_connectivity_dict['directionality']
         params_obj_neural['N'] = len(custom_connectivity_dict['gap'])
-        print('Accepted the custom connectivity')
+        #print('Accepted the custom connectivity')
 
     params_obj_neural['EMat'] = params_obj_neural['E_rev'] * EMat_mask
     params_obj_neural['mask_Healthy'] = np.ones(params_obj_neural['N'], dtype = 'bool')
@@ -417,7 +418,7 @@ def modify_Connectome(ablation_mask, ablation_type):
         params_obj_neural['Gg_Dynamic'] = np.multiply(params_obj_neural['Gg_Static'], apply_Mat)
         params_obj_neural['Gs_Dynamic'] = np.multiply(params_obj_neural['Gs_Static'], apply_Mat)
 
-        print("All neurons are healthy")
+        #print("All neurons are healthy")
 
         EffVth(params_obj_neural['Gg_Dynamic'], params_obj_neural['Gs_Dynamic'])
 
@@ -433,21 +434,21 @@ def modify_Connectome(ablation_mask, ablation_type):
             params_obj_neural['Gg_Dynamic'] = np.multiply(params_obj_neural['Gg_Static'], apply_Mat)
             params_obj_neural['Gs_Dynamic'] = np.multiply(params_obj_neural['Gs_Static'], apply_Mat)
 
-            print("Ablating both Gap and Syn")
+            #print("Ablating both Gap and Syn")
 
         elif ablation_type == "syn":
 
             params_obj_neural['Gg_Dynamic'] = params_obj_neural['Gg_Static'].copy()
             params_obj_neural['Gs_Dynamic'] = np.multiply(params_obj_neural['Gs_Static'], apply_Mat)
 
-            print("Ablating only Syn")
+            #print("Ablating only Syn")
 
         elif ablation_type == "gap":
 
             params_obj_neural['Gg_Dynamic'] = np.multiply(params_obj_neural['Gg_Static'], apply_Mat)
             params_obj_neural['Gs_Dynamic'] = params_obj_neural['Gs_Static'].copy()
 
-            print("Ablating only Gap")
+            #print("Ablating only Gap")
 
         EffVth(params_obj_neural['Gg_Dynamic'], params_obj_neural['Gs_Dynamic'])
 
@@ -493,12 +494,13 @@ def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize
         batch_states.append(np.hstack([err_k, Gg_flat_k, Gs_flat_k, pair_id_k]))
 
     batch_state_vec = np.hstack(batch_states)
+    #print(batch_state_vec.shape)
 
     return batch_state_vec, newest_err_diff
 
-def compute_reward(reward_param, reward_type = 'asymptotic'):
+def compute_reward(reward_param, reward_type):
 
-    if reward_type == 'bionomial':
+    if reward_type == 'binomial':
 
         if reward_param < 0:
 
