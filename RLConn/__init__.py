@@ -14,7 +14,9 @@ from RLConn import sys_paths
 from RLConn import neural_params    
 from RLConn import network_sim 
 from RLConn import control_dqn
+from RLConn import connectome_utils
 from RLConn import utils
+from RLConn import problem_definitions
 from RLConn import plotting
 
 # TODO: Integrate initial enviornment in global level

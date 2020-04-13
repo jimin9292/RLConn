@@ -8,6 +8,7 @@
 import json
 import numpy as np
 import scipy.stats as spstats
+import itertools
 import matplotlib.pyplot as plt
 
 from RLConn import neural_params as n_params
@@ -43,20 +44,6 @@ def construct_dyn_inputmat(t0, tf, dt, input_type, neuron_indices, normalized_am
 
             noise = 10**(-2)*np.random.normal(0, noise_amplitudes[k], len(input_mat))
             input_mat[:, neuron_indices[k]] = normalized_amps[k] + noise
-
-    #elif input_type == 'step':
-
-    #    for k in range(len(neuron_indices)):
-
-    #        step_start = step_time_interval[k, 0]
-    #        step_end = step_time_interval[k, 1]
-
-    #        step_start_ind = step_start / dt
-    #        step_end_ind = step_end / dt
-    #        step_start_ind = int(step_start_ind)
-    #        step_end_ind = int(step_end_ind)
-
-    #        input_mat[step_start_ind:step_end_ind, neuron_indices[k]] = normalized_amps[k]
 
     return input_mat
 
@@ -108,24 +95,69 @@ def running_mean(x, N):
     cumsum = np.cumsum(np.insert(x, 0, 0)) 
     return (cumsum[N:] - cumsum[:-N]) / N
 
-def compute_action_combinations(action_2_delweight_space, num_modifiable_weights):
+def compute_action_combinations(del_W_space, num_modifiable_weights):
 
-    import itertools
-
-    actions = np.asarray(action_2_stim_space)
-    action_combs = np.asarray([p for p in itertools.product(actions, repeat=num_neurons)])
+    actions = np.asarray(del_W_space)
+    action_combs = np.asarray([p for p in itertools.product(actions, repeat=num_modifiable_weights)])
 
     return action_combs
 
-def convert_syn_2_vec(M):
+def compute_possible_pairs(num_neurons):
+
+    return list(itertools.combinations(range(num_neurons), 2))
+
+def convert_conn_2_vec(M):
 
     M_vec = np.matrix.flatten(M[~np.eye(M.shape[0],dtype=bool)].reshape(M.shape[0],-1))
 
     return M_vec
 
-def convert_gap_2_vec(M):
+def update_weight_gap(Gg, neuron_from, neuron_to, action_bidirectional, weight_min, weight_max):
 
-    M[~np.eye(M.shape[0],dtype=bool)].reshape(M.shape[0],-1)
+    updated_Gg = Gg.copy()
+
+    new_weight = Gg[neuron_from, neuron_to] + action_bidirectional
+
+    if new_weight < weight_min:
+
+        new_weight = weight_min
+
+    elif new_weight > weight_max:
+
+        new_weight = weight_max
+
+    updated_Gg[neuron_from, neuron_to] = new_weight
+    updated_Gg[neuron_to, neuron_from] = new_weight
+
+    return Gg
+
+def update_weight_syn(Gs, neuron_from, neuron_to, action_ougoing, action_incoming, weight_min, weight_max):
+
+    updated_Gs = Gs.copy()
+
+    new_weight_outgoing = Gg[neuron_from, neuron_to] + action_ougoing
+    new_weight_incoming = Gg[neuron_to, neuron_from] + action_incoming
+
+    if new_weight_outgoing < weight_min:
+
+        new_weight_outgoing = weight_min
+
+    elif new_weight_outgoing > weight_max:
+
+        new_weight_outgoing = weight_max
+
+    if new_weight_incoming < weight_min:
+
+        new_weight_incoming = weight_min
+
+    elif new_weight_incoming > weight_max:
+
+        new_weight_incoming = weight_max
+
+    updated_Gs[neuron_from, neuron_to] = new_weight_outgoing
+    updated_Gs[neuron_to, neuron_from] = new_weight_incoming
+
+    return updated_Gs
 
 def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
     """

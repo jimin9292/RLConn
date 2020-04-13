@@ -19,78 +19,191 @@ import matplotlib.pyplot as plt
 ####################################################################################################################################
 
 batchsize = 3
-update_frequency = 10
-
-n_actions = 10
-n_features =  10 * batchsize # 18 for single gradient sensor, 3 controllable neurons and batchsize of 3
-
-action_2_delweight_space = [5e-4, 0, -5e-4]
-#action_2_delweight_multiple = utils.compute_action_combinations()
-
-RL = ccd.DeepQNetwork(n_actions, n_features)
+update_frequency = 1
+ 
+del_W_space = [-1, 0, 1]
+num_modifiable_weights = 3
+action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifiable_weights) #[gap, syn_outgoing, syn_incoming]
 
 # Default
 # lr = 0.01
 # memory_size = 5000
-# batch size = 64
-# learn every 10 steps
+# batch size = 32
+# learn every 1 step
 # n_features = 20
 # n_actions = 3
 # reward function = diff norm tanh
 # epsilon = greedy
 # epsilon increment = 0.002 (500 learnings)
 
-def train_network(epochs = False):
+def train_network(network_dict_init, external_params_dict, 
+                    batchsize, num_epochs, err_threshold, 
+                    weight_min, weight_max, plotting_period):
 
-    if epochs != False:
+    Gg_init = network_dict_init['Gg']
+    Gs_init = network_dict_init['Gs']
+    E = network_dict_init['E']
 
-        for k in range(epochs):
+    input_vec = external_params_dict['input_vec']
+    ablation_mask = external_params_dict['ablation_mask']
+    tf = external_params_dict['tf']
+    t_delta = external_params_dict['t_delta']
+    cutoff_1 = external_params_dict['cutoff_1']
+    cutoff_2 = external_params_dict['cutoff_2']
 
-            if k == 1:
+    num_neurons = len(Gg_init) # neuron order from row 0 to row N
+    all_possible_pairs = utils.compute_possible_pairs(num_neurons)
+    pair_ids = np.arange(len(all_possible_pairs))
+    network_sweep_size = len(pair_ids)
 
-                observation, newest_err_vec = compute_batch_state()
+    assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2)
 
-            else:
+    n_features_single = (2 * num_neurons**2) + 2
 
-                observation_, newest_err_vec_ = compute_batch_state()
+    n_actions = num_modifiable_weights**(len(del_W_space))
+    n_features =  n_features_single * batchsize # [err (1), Gg (N^2), Gs (N^2), modified_pair_id (1)]
 
-                reward = compute_reward(delta_norm, reward_type = 'delta_norm_tanh')
-                reward_list.append(reward)
+    RL = ccd.DeepQNetwork(n_actions, n_features)
 
-                RL.store_transition(observation, action, reward, observation_)
+    err_list = []
+    Gg_list = []
+    Gs_list = []
+    modified_pair_ids = []
+    reward_list = []
 
+    init_err = utils.compute_score(Gg_init, Gs_init, E, 
+                                            input_vec, ablation_mask, 
+                                            tf, t_delta, cutoff_1, cutoff_2,
+                                            m1_target = n_params.m1_target,
+                                            m2_target = n_params.m2_target,
+                                            plot_result = periodic_plotting_bool,
+                                            verbose = True)[0]
 
-                observation = observation_.copy()
-                newest_err_vec = newest_err_vec_.copy()
+    err_list.append(init_err)
+    Gg_list.append(Gg_init)
+    Gs_list.append(Gs_init)
 
-                action = RL.choose_action(observation)
-                action_stim = action_2_stim_space_multiple[action]
+    if num_epochs != False:
 
-            if k > batchsize and k % update_frequency == 0:
-          
-                    RL.learn()
-                    print("Epoch: " + str(k))
-                    print("Collected reward: " + str())
+        k = 0
+
+        for epoch in range(num_epochs):
+
+            for pair_id in pair_ids:
+
+                if k < batchsize: #k = 0,1,2
+
+                    random_action_ind = np.random.randint(0, len(action_2_conn_space), 1)
+                    action = action_2_conn_space[random_action_ind]
+
+                    neuron_from = all_possible_pairs[pair_id][0]
+                    neuron_to = all_possible_pairs[pair_id][1]
+
+                    Gg_latest = Gg_list[-1].copy()
+                    Gs_latest = Gs_list[-1].copy()
+
+                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+
+                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
+                                            input_vec, ablation_mask, 
+                                            tf, t_delta, cutoff_1, cutoff_2,
+                                            m1_target = n_params.m1_target,
+                                            m2_target = n_params.m2_target,
+                                            plot_result = periodic_plotting_bool,
+                                            verbose = True)[0]
+
+                    err_list.append(new_err)
+                    Gg_list.append(updated_Gg)
+                    Gs_list.append(updated_Gs)
+                    modified_pair_ids.append(pair_id)
+
+                elif k == batchsize: #k = 3
+
+                    observation, newest_err_vec = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                    rl_action_ind = RL.choose_action(observation)
+                    action = action_2_conn_space[rl_action_ind]
+
+                    neuron_from = all_possible_pairs[pair_id][0]
+                    neuron_to = all_possible_pairs[pair_id][1]
+
+                    Gg_latest = Gg_list[-1].copy()
+                    Gs_latest = Gs_list[-1].copy()
+
+                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+
+                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
+                                            input_vec, ablation_mask, 
+                                            tf, t_delta, cutoff_1, cutoff_2,
+                                            m1_target = n_params.m1_target,
+                                            m2_target = n_params.m2_target,
+                                            plot_result = periodic_plotting_bool,
+                                            verbose = True)[0]
+
+                    err_list.append(new_err)
+                    Gg_list.append(updated_Gg)
+                    Gs_list.append(updated_Gs)
+                    modified_pair_ids.append(pair_id)
+
+                else: #k > 3
+
+                    observation_, newest_err_vec_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+
+                    reward = compute_reward(err_list, reward_type = 'binomial')
+                    reward_list.append(reward)
+
+                    RL.store_transition(observation, action, reward, observation_)
+
+                    observation = observation_.copy()
+
+                    rl_action_ind = RL.choose_action(observation)
+                    action = action_2_conn_space[rl_action_ind]
+                    
+                    neuron_from = all_possible_pairs[pair_id][0]
+                    neuron_to = all_possible_pairs[pair_id][1]
+
+                    Gg_latest = Gg_list[-1].copy()
+                    Gs_latest = Gs_list[-1].copy()
+
+                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+
+                    new_err = utils.compute_score(Gg, Gs, E, 
+                                            input_vec, ablation_mask, 
+                                            tf, t_delta, cutoff_1, cutoff_2,
+                                            m1_target = n_params.m1_target,
+                                            m2_target = n_params.m2_target,
+                                            plot_result = periodic_plotting_bool,
+                                            verbose = True)
+
+                    err_list.append(new_err)
+                    Gg_list.append(updated_Gg)
+                    Gs_list.append(updated_Gs)
+                    modified_pair_ids.append(pair_id)
+
+                if k > batchsize and k % update_frequency == 0:
+              
+                        RL.learn()
+                        print("Epoch: " + str(k))
+                        print("Collected reward: " + str())
+
+            k += 1
 
     print("score: " + str(np.sum(reward_list)))
 
-    trained_network_dict = {
+    training_result = {
 
-    "Gg": 'tbh',
-    "Gs": 'tbh',
-    "Emat_mask": 'tbh',
-    "raw_v_solution": traj,
-    "v_threshold": vthmat,
-    "v_solution" : voltage_filter(np.subtract(traj, vthmat), 200, 1),
-    "lowdim_traj" : 'tbh',
-    "error" : 'tbh',
-    "reward": 'tbh'
-
+    "err_list" : err_list,
+    "Gg_list" : Gg_list,
+    "Gs_list" : Gs_list,
+    "modified_pair_ids" : modified_pair_ids,
+    "reward_list" : reward_list,
+    "E" : E
+    
     }
 
-    return trained_network_dict
-
-
+    return training_result
 
 def run_network_constinput_RL(t_start, t_final, t_delta, input_vec, ablation_mask, \
     custom_initcond = False, ablation_type = "all", verbose=True):
@@ -327,68 +440,6 @@ def modify_Connectome(ablation_mask, ablation_type):
         EffVth(params_obj_neural['Gg_Dynamic'], params_obj_neural['Gs_Dynamic'])
 
 
-def modify_edges(neurons_from, neurons_to, conn_type):
-
-    apply_Mat = np.ones((params_obj_neural['N'],params_obj_neural['N']), dtype = 'bool')
-    apply_Mat_Identity = np.ones((params_obj_neural['N'],params_obj_neural['N']), dtype = 'bool')
-
-    for k in range(len(neurons_from)):
-
-        neuron_from_ind = []
-        neurons_target_inds = []
-
-        neuron_from = neurons_from[k]
-        neurons_target = neurons_to[k]
-
-        neuron_from_ind.append(neuron_names.index(neuron_from))
-
-        for neuron_target in neurons_target:
-
-            neurons_target_inds.append(neuron_names.index(neuron_target))
-
-        if conn_type == 'syn':
-
-            apply_Mat[neurons_target_inds, neuron_from_ind] = 0
-
-        elif conn_type == 'gap':
-
-            apply_Mat[neurons_target_inds, neuron_from_ind] = 0
-            apply_Mat[neuron_from_ind, neurons_target_inds] = 0
-
-    if conn_type == 'syn':
-
-        params_obj_neural['Gg_Dynamic'] = np.multiply(params_obj_neural['Gg_Static'], apply_Mat_Identity)
-        params_obj_neural['Gs_Dynamic'] = np.multiply(params_obj_neural['Gs_Static'], apply_Mat)
-
-    elif conn_type == 'gap':
-
-        params_obj_neural['Gg_Dynamic'] = np.multiply(params_obj_neural['Gg_Static'], apply_Mat)
-        params_obj_neural['Gs_Dynamic'] = np.multiply(params_obj_neural['Gs_Static'], apply_Mat_Identity)
-
-    EffVth(params_obj_neural['Gg_Dynamic'], params_obj_neural['Gs_Dynamic'])
-
-def add_gap_junctions(neuron_pairs_mat, gap_weights_vec):
-
-    """ neuron_pairs_mat is (N, 2) numpy.array form where N is the total number of pairs. 
-        Each element should be of type float denoting the index number of neuron"""
-
-    """ gap_weights_vec is (N,) numpy.array form where N is the total number of pair.
-        Each element should be of type float denoting the gap weights to be added for each pair"""
-
-    """ This function should be executed after modify_Connectome """
-
-    num_pairs = len(neuron_pairs_mat)
-
-    for k in range(num_pairs):
-
-        neuron_ind_1 = neuron_pairs_mat[k, 0]
-        neuron_ind_2 - neuron_pairs_mat[k, 1]
-
-        params_obj_neural['Gg_Dynamic'][neuron_ind_1, neuron_ind_2] = params_obj_neural['Gg_Dynamic'][neuron_ind_1, neuron_ind_2] + gap_weights_vec[k]
-        params_obj_neural['Gg_Dynamic'][neuron_ind_2, neuron_ind_1] = params_obj_neural['Gg_Dynamic'][neuron_ind_2, neuron_ind_1] + gap_weights_vec[k]
-
-    EffVth(params_obj_neural['Gg_Dynamic'], params_obj_neural['Gs_Dynamic'])
-
 def voltage_filter(v_vec, vmax, scaler):
     
     filtered = vmax * np.tanh(scaler * np.divide(v_vec, vmax))
@@ -409,51 +460,39 @@ def produce_lowdim_traj(v_solution, dim_num):
 
 ###################################################################################
 
-def compute_batch_state():
+def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize):
 
-    return 'function to be written'
+    err_batch = err_list[-3:]
+    Gg_batch = Gg_list[-3:]
+    Gs_batch = Gs_list[-3:]
+    pair_ids_batch = modified_pair_ids[-3:]
+
+    batch_states = []
+
+    for k in range(batchsize):
+
+        err_k = err_list[k]
+        Gg_flat_k = utils.convert_conn_2_vec(Gg_batch[k])
+        Gs_flat_k = utils.convert_conn_2_vec(Gs_batch[k])
+        pair_id_k = pair_ids_batch[k]
+
+        batch_states.append(np.hstack([err_k, Gg_flat_k, Gs_flat_k, pair_id_k]))
+
+    batch_state_vec = np.hstack(batch_states)
+
+    return batch_state_vec
 
 def compute_reward(reward_param, reward_type = 'asymptotic'):
 
-    if reward_type == 'asymptotic':
+    if reward_type == 'bionomial':
 
-        reward = np.reciprocal(np.exp(positive_reward_droprate * reward_param))
-
-    elif reward_type == 'leaky':
-
-        if reward_param < target_radius:
-
-            reward = np.reciprocal(np.exp(positive_reward_droprate * reward_param))
-
-        else:
-
-            reward = -negative_reward_coeff * (reward_param - target_radius)
-
-    elif reward_type == 'delta_norm_tanh':
-
-        reward = -np.tanh(delta_norm_const * reward_param)
-
-    elif reward_type == 'proximity':
-
-        if reward_param < target_radius:
+        if reward_param < 0:
 
             reward = 1
 
         else:
 
             reward = -1
-
-    elif reward_type == 'attraction':
-
-        gradient_strength = reward_param[0]
-
-        if gradient_strength < 1:
-
-            reward = gradient_strength
-
-        else:
-
-            reward = 1
 
     return reward
 
