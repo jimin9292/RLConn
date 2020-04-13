@@ -40,9 +40,9 @@ def train_network(network_dict_init, external_params_dict,
                     batchsize, num_epochs, err_threshold, 
                     weight_min, weight_max, plotting_period):
 
-    Gg_init = network_dict_init['Gg']
-    Gs_init = network_dict_init['Gs']
-    E = network_dict_init['E']
+    Gg_init = network_dict_init['gap']
+    Gs_init = network_dict_init['syn']
+    E = network_dict_init['directionality']
 
     input_vec = external_params_dict['input_vec']
     ablation_mask = external_params_dict['ablation_mask']
@@ -56,12 +56,12 @@ def train_network(network_dict_init, external_params_dict,
     pair_ids = np.arange(len(all_possible_pairs))
     network_sweep_size = len(pair_ids)
 
-    assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2)
+    assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2) # N(N-1) / 2
 
-    n_features_single = (2 * num_neurons**2) + 2
+    n_features_single = (2 * num_neurons**2) + 2 # [err (1), Gg (N^2), Gs (N^2), pair_2b_modified_id (1)]
 
     n_actions = num_modifiable_weights**(len(del_W_space))
-    n_features =  n_features_single * batchsize # [err (1), Gg (N^2), Gs (N^2), modified_pair_id (1)]
+    n_features =  n_features_single * batchsize 
 
     RL = ccd.DeepQNetwork(n_actions, n_features)
 
@@ -70,6 +70,8 @@ def train_network(network_dict_init, external_params_dict,
     Gs_list = []
     modified_pair_ids = []
     reward_list = []
+
+    periodic_plotting_bool = True
 
     init_err = utils.compute_score(Gg_init, Gs_init, E, 
                                             input_vec, ablation_mask, 
@@ -83,17 +85,23 @@ def train_network(network_dict_init, external_params_dict,
     Gg_list.append(Gg_init)
     Gs_list.append(Gs_init)
 
+    print("Initialization Complete")
+
     if num_epochs != False:
 
         k = 0
 
         for epoch in range(num_epochs):
 
+            # NETWORK SWEEP
+
             for pair_id in pair_ids:
 
                 if k < batchsize: #k = 0,1,2
 
-                    random_action_ind = np.random.randint(0, len(action_2_conn_space), 1)
+                    modified_pair_ids.append(pair_id)
+
+                    random_action_ind = np.random.randint(0, len(action_2_conn_space), 1)[0]
                     action = action_2_conn_space[random_action_ind]
 
                     neuron_from = all_possible_pairs[pair_id][0]
@@ -116,11 +124,13 @@ def train_network(network_dict_init, external_params_dict,
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
                     Gs_list.append(updated_Gs)
-                    modified_pair_ids.append(pair_id)
 
                 elif k == batchsize: #k = 3
 
-                    observation, newest_err_vec = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                    modified_pair_ids.append(pair_id)
+
+                    observation, newest_err_diff = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                    print(observation)
                     rl_action_ind = RL.choose_action(observation)
                     action = action_2_conn_space[rl_action_ind]
 
@@ -144,11 +154,12 @@ def train_network(network_dict_init, external_params_dict,
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
                     Gs_list.append(updated_Gs)
-                    modified_pair_ids.append(pair_id)
 
                 else: #k > 3
 
-                    observation_, newest_err_vec_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                    modified_pair_ids.append(pair_id)
+
+                    observation_, newest_err_diff_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
 
                     reward = compute_reward(err_list, reward_type = 'binomial')
                     reward_list.append(reward)
@@ -169,6 +180,10 @@ def train_network(network_dict_init, external_params_dict,
                     updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
                     updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
 
+                    if k % plotting_period == 0:
+
+                        periodic_plotting_bool = True
+
                     new_err = utils.compute_score(Gg, Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
@@ -180,17 +195,14 @@ def train_network(network_dict_init, external_params_dict,
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
                     Gs_list.append(updated_Gs)
-                    modified_pair_ids.append(pair_id)
 
                 if k > batchsize and k % update_frequency == 0:
               
                         RL.learn()
-                        print("Epoch: " + str(k))
-                        print("Collected reward: " + str())
 
-            k += 1
+                k += 1
 
-    print("score: " + str(np.sum(reward_list)))
+            print("score: " + str(np.sum(reward_list[-network_sweep_size:])))
 
     training_result = {
 
@@ -462,10 +474,12 @@ def produce_lowdim_traj(v_solution, dim_num):
 
 def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize):
 
-    err_batch = err_list[-3:]
-    Gg_batch = Gg_list[-3:]
-    Gs_batch = Gs_list[-3:]
-    pair_ids_batch = modified_pair_ids[-3:]
+    err_batch = err_list[-batchsize:]
+    Gg_batch = Gg_list[-batchsize:]
+    Gs_batch = Gs_list[-batchsize:]
+    pair_ids_batch = modified_pair_ids[-batchsize:]
+
+    newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative error, if negative, positive error
 
     batch_states = []
 
@@ -480,7 +494,7 @@ def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize
 
     batch_state_vec = np.hstack(batch_states)
 
-    return batch_state_vec
+    return batch_state_vec, newest_err_diff
 
 def compute_reward(reward_param, reward_type = 'asymptotic'):
 

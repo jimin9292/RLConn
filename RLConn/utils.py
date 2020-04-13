@@ -135,8 +135,8 @@ def update_weight_syn(Gs, neuron_from, neuron_to, action_ougoing, action_incomin
 
     updated_Gs = Gs.copy()
 
-    new_weight_outgoing = Gg[neuron_from, neuron_to] + action_ougoing
-    new_weight_incoming = Gg[neuron_to, neuron_from] + action_incoming
+    new_weight_outgoing = Gs[neuron_from, neuron_to] + action_ougoing
+    new_weight_incoming = Gs[neuron_to, neuron_from] + action_incoming
 
     if new_weight_outgoing < weight_min:
 
@@ -214,7 +214,7 @@ def compute_score(Gg, Gs, E,
                                                                ablation_mask=ablation_mask,
                                                                verbose=verbose)
 
-    plt.plot(network_result_dict['v_solution'][100:, :])
+    #plt.plot(network_result_dict['v_solution'][100:, :])
 
     # Obtain test modes using SVD 
 
