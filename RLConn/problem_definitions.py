@@ -108,3 +108,128 @@ def get_three_neuron_oscillation_definition():
         init_Gg = init_Gg,
         init_Gs = init_Gs,
     )
+
+def get_four_neuron_oscillation_definition():
+    np.random.seed(10)
+    N = 4
+    network = connectome_utils.generate_random_network(N, 1, 10)
+    Gg = network['gap']
+    Gs = network['syn']
+    is_inhibitory = network['directionality'][0]
+    input_vec = [0.068, 0, 0, 0]
+
+    # We are not doing any ablation.
+    ablation_mask = np.ones(N)
+    t_delta = 0.01
+
+    # Run for 10 seconds.
+    tf = 10
+    # Note that these cutoff offsets are actually number of dt's _after_
+    # the 100 timestep truncation in compute_score.
+    cutoff_1 = 150
+    cutoff_2 = 650
+
+    network_dict = {
+        "gap": Gg,
+        "syn": Gs,
+        "directionality": is_inhibitory
+    }
+
+    # Initialize model with the network dict
+
+    network_sim.initialize_params_neural()
+    network_sim.initialize_connectivity(network_dict)
+
+    # Simulate network with given input_vec and ablation mask
+
+    network_result_dict = network_sim.run_network_constinput_RL(0, tf, t_delta,
+                                                                input_vec=input_vec,
+                                                                ablation_mask=ablation_mask,
+                                                                verbose=False)
+    # Obtain test modes using SVD
+    v_solution_truncated = network_result_dict['v_solution'][100:, :]
+    u, s, v = np.linalg.svd(v_solution_truncated.T)
+    top_mode = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
+
+    # Set initial guess to be around the true parameter values, but with noise.
+    np.random.seed(2)
+    init_compact_vec = connectomes.model_to_compact_param(Gg, Gs, N);
+    init_compact_vec = init_compact_vec.astype(float);
+    init_compact_vec += np.random.rand(len(init_compact_vec))
+    init_Gg, init_Gs = connectomes.compact_to_model_param(init_compact_vec, N)
+
+    return ProblemDefinition(
+        N = N,
+        m1_target = top_mode,
+        m2_target = None,
+        directionality =  is_inhibitory,
+        input_vec =  input_vec,
+        tf = tf,
+        cutoff_1 = cutoff_1,
+        cutoff_2 = cutoff_2,
+        init_Gg = init_Gg,
+        init_Gs = init_Gs,
+    )
+
+def get_five_neuron_oscillation_definition():
+    np.random.seed(10)
+    N = 5
+    np.random.seed(3)
+    network = connectome_utils.generate_random_network(N, 1, 10)
+    Gg = network['gap']
+    Gs = network['syn']
+    is_inhibitory = network['directionality'][0]
+    input_vec = [0.068, 0, 0, 0, 0]
+
+    # We are not doing any ablation.
+    ablation_mask = np.ones(N)
+    t_delta = 0.01
+
+    # Run for 15 seconds.
+    tf = 15
+    # Note that these cutoff offsets are actually number of dt's _after_
+    # the 100 timestep truncation in compute_score.
+    cutoff_1 = 650
+    cutoff_2 = 900
+
+    network_dict = {
+        "gap": Gg,
+        "syn": Gs,
+        "directionality": is_inhibitory
+    }
+
+    # Initialize model with the network dict
+
+    network_sim.initialize_params_neural()
+    network_sim.initialize_connectivity(network_dict)
+
+    # Simulate network with given input_vec and ablation mask
+
+    network_result_dict = network_sim.run_network_constinput_RL(0, tf, t_delta,
+                                                                input_vec=input_vec,
+                                                                ablation_mask=ablation_mask,
+                                                                verbose=False)
+    # Obtain test modes using SVD
+    v_solution_truncated = network_result_dict['v_solution'][100:, :]
+    u, s, v = np.linalg.svd(v_solution_truncated.T)
+    top_mode = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
+
+    # Set initial guess to be around the true parameter values, but with noise.
+    np.random.seed(2)
+    init_compact_vec = connectomes.model_to_compact_param(Gg, Gs, N);
+    init_compact_vec = init_compact_vec.astype(float);
+    init_compact_vec += np.random.rand(len(init_compact_vec))
+    init_Gg, init_Gs = connectomes.compact_to_model_param(init_compact_vec, N)
+
+    return ProblemDefinition(
+        N = N,
+        m1_target = top_mode,
+        m2_target = None,
+        directionality =  is_inhibitory,
+        input_vec =  input_vec,
+        tf = tf,
+        cutoff_1 = cutoff_1,
+        cutoff_2 = cutoff_2,
+        init_Gg = init_Gg,
+        init_Gs = init_Gs,
+    )
