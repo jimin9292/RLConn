@@ -7,10 +7,11 @@ import numpy as np
 from RLConn import network_sim
 from RLConn import neural_params as n_params
 from RLConn import connectome_utils
+from RLConn import stephen_utils as connectomes
 
 class ProblemDefinition():
     def __init__(self, N, m1_target, m2_target, directionality, input_vec,
-                 tf = 7, cutoff_1 = 100, cutoff_2 = 600):
+                 tf = 7, cutoff_1 = 100, cutoff_2 = 600, init_Gg = None, init_Gs = None):
         self.N = N
         # The top 2 modes of the gold dynamics to compare against.
         self.m1_target = m1_target
@@ -20,6 +21,10 @@ class ProblemDefinition():
         self.tf = tf
         self.cutoff_1 = cutoff_1
         self.cutoff_2 = cutoff_2
+
+        # Suggested initial connectome to try.
+        self.init_Gg = init_Gg
+        self.init_Gs = init_Gs
 
 np.random.seed(10)
 network_dict = connectome_utils.generate_random_network(
@@ -85,6 +90,12 @@ def get_three_neuron_oscillation_definition():
     u, s, v = np.linalg.svd(v_solution_truncated.T)
     top_mode = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
 
+    # Set initial guess to be around the true parameter values, but with noise.
+    np.random.seed(2)
+    init_compact_vec = [8, 5, 2, 7, 7, 7, 2, 8, 3]
+    init_compact_vec += np.random.rand(len(init_compact_vec))
+    init_Gg, init_Gs = connectomes.compact_to_model_param(init_compact_vec, N)
+
     return ProblemDefinition(
         N = 3,
         m1_target = top_mode,
@@ -93,5 +104,7 @@ def get_three_neuron_oscillation_definition():
         input_vec =  np.array([0, 0.03, 0]),
         tf = tf,
         cutoff_1 = cutoff_1,
-        cutoff_2 = cutoff_2
+        cutoff_2 = cutoff_2,
+        init_Gg = init_Gg,
+        init_Gs = init_Gs,
     )
