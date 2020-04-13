@@ -118,7 +118,7 @@ def train_network(network_dict_init, external_params_dict,
                                             tf, t_delta, cutoff_1, cutoff_2,
                                             m1_target = n_params.m1_target,
                                             m2_target = n_params.m2_target,
-                                            plot_result = periodic_plotting_bool,
+                                            plot_result = False,
                                             verbose = True)[0]
 
                     err_list.append(new_err)
@@ -148,7 +148,7 @@ def train_network(network_dict_init, external_params_dict,
                                             tf, t_delta, cutoff_1, cutoff_2,
                                             m1_target = n_params.m1_target,
                                             m2_target = n_params.m2_target,
-                                            plot_result = periodic_plotting_bool,
+                                            plot_result = False,
                                             verbose = True)[0]
 
                     err_list.append(new_err)
@@ -185,6 +185,10 @@ def train_network(network_dict_init, external_params_dict,
 
                         periodic_plotting_bool = True
 
+                    else:
+
+                        periodic_plotting_bool = False
+
                     new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
@@ -203,7 +207,7 @@ def train_network(network_dict_init, external_params_dict,
 
                 k += 1
 
-            print("score: " + str(np.sum(reward_list[-network_sweep_size:])))
+            print("error: " + str(err_list[-1]))
 
     training_result = {
 

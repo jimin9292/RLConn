@@ -141,13 +141,13 @@ class DeepQNetwork:
 
         self.cost_his.append(cost)
 
-        print("cost: " + str(cost))
+        #print("cost: " + str(cost))
 
         # increasing epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
         self.learn_step_counter += 1
 
-        print("epsilon: " + str(self.epsilon))
+        #print("epsilon: " + str(self.epsilon))
 
     def plot_cost(self):
         import matplotlib.pyplot as plt
