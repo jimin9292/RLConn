@@ -88,7 +88,9 @@ def get_three_neuron_oscillation_definition():
     # Obtain test modes using SVD
     v_solution_truncated = network_result_dict['v_solution'][100:, :]
     u, s, v = np.linalg.svd(v_solution_truncated.T)
-    top_mode = np.dot(v_solution_truncated, u)[cutoff_1:cutoff_2, 0]
+    projected = np.dot(v_solution_truncated, u)
+    m1 = projected[cutoff_1:cutoff_2, 0]
+    m2 = projected[cutoff_1:cutoff_2, 1]
 
     # Set initial guess to be around the true parameter values, but with noise.
     np.random.seed(2)
@@ -98,8 +100,8 @@ def get_three_neuron_oscillation_definition():
 
     return ProblemDefinition(
         N = 3,
-        m1_target = top_mode,
-        m2_target = None,
+        m1_target = m1,
+        m2_target = m2,
         directionality =  np.array([1, 0 ,0]),
         input_vec =  np.array([0, 0.03, 0]),
         tf = tf,

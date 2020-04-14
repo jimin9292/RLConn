@@ -216,8 +216,8 @@ def compute_score(Gg, Gs, E,
             plt.scatter(m1_target, m2_target, s = 0.75, color = 'black')
             plt.scatter(m1_test, m2_test, s = 0.75, color = 'red')
 
-            plt.ylim(-25, 25)
-            plt.xlim(-25, 25)
+            plt.ylim(-40, 40)
+            plt.xlim(-40, 40)
 
         num_timesamples = m1_target.shape[0]
         timepoints = np.arange(0, num_timesamples * t_delta, t_delta)
