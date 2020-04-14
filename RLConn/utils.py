@@ -129,7 +129,7 @@ def update_weight_gap(Gg, neuron_from, neuron_to, action_bidirectional, weight_m
     updated_Gg[neuron_from, neuron_to] = new_weight
     updated_Gg[neuron_to, neuron_from] = new_weight
 
-    return Gg
+    return updated_Gg   
 
 def update_weight_syn(Gs, neuron_from, neuron_to, action_ougoing, action_incoming, weight_min, weight_max):
 

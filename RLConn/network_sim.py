@@ -25,6 +25,10 @@ del_W_space = [-1, 0, 1]
 num_modifiable_weights = 3
 action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifiable_weights) #[gap, syn_outgoing, syn_incoming]
 
+positive_reward_droprate = 0.15
+negative_reward_coeff = 5e-2
+delta_norm_const = 0.1
+
 # Default
 # lr = 0.01
 # memory_size = 5000
@@ -119,7 +123,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                                             m1_target = m1_target,
                                             m2_target = m2_target,
                                             plot_result = False,
-                                            verbose = True)[1]
+                                            verbose = True)[0]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -130,7 +134,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                     modified_pair_ids.append(pair_id)
 
                     observation, newest_err_diff = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
-                    #print(observation)
+
                     rl_action_ind = RL.choose_action(observation)
                     action = action_2_conn_space[rl_action_ind]
 
@@ -149,7 +153,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                                             m1_target = m1_target,
                                             m2_target = m2_target,
                                             plot_result = False,
-                                            verbose = True)[1]
+                                            verbose = True)[0]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -161,7 +165,8 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
 
                     observation_, newest_err_diff_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
 
-                    reward = compute_reward(newest_err_diff_, reward_type = 'binomial')
+                    reward = compute_reward(newest_err_diff_, reward_type = 'delta_norm_tanh')
+                    #reward = compute_reward(err_list[-1], reward_type = 'asymptotic')
                     reward_list.append(reward)
 
                     RL.store_transition(observation, rl_action_ind, reward, observation_)
@@ -195,7 +200,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                                             m1_target = m1_target,
                                             m2_target = m2_target,
                                             plot_result = periodic_plotting_bool,
-                                            verbose = True)[1]
+                                            verbose = True)[0]
 
                     err_list.append(new_err)
                     Gg_list.append(updated_Gg)
@@ -206,6 +211,11 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                         RL.learn()
 
                 k += 1
+
+                if k % 300 == 1:
+
+                    print("Gg :" + str(Gg_list[-1]))
+                    print("Gs :" + str(Gs_list[-1]))
 
             print("error: " + str(err_list[-1]))
 
@@ -485,6 +495,7 @@ def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize
     pair_ids_batch = modified_pair_ids[-batchsize:]
 
     newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative error, if negative, positive error
+    #print(newest_err_diff)
 
     batch_states = []
 
@@ -513,6 +524,14 @@ def compute_reward(reward_param, reward_type):
         else:
 
             reward = -1
+
+    elif reward_type == 'asymptotic':
+
+        reward = np.reciprocal(np.exp(positive_reward_droprate * reward_param))
+
+    elif reward_type == 'delta_norm_tanh':
+
+        reward = -np.tanh(delta_norm_const * reward_param)
 
     return reward
 
