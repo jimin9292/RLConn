@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 import os
@@ -17,15 +16,12 @@ import matplotlib.pyplot as plt
 ####################################################################################################################################
 ####################################################################################################################################
 ####################################################################################################################################
-
-batchsize = 3
-update_frequency = 1
  
 del_W_space = [-1, 0, 1]
-num_modifiable_weights = 3
-action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifiable_weights) #[gap, syn_outgoing, syn_incoming]
+num_modifiable_weights = 1
+action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifiable_weights) #
 
-positive_reward_droprate = 0.15
+positive_reward_droprate = 1e-5
 negative_reward_coeff = 5e-2
 delta_norm_const = 0.1
 
@@ -58,36 +54,43 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
     num_neurons = len(Gg_init) # neuron order from row 0 to row N
     all_possible_pairs = utils.compute_possible_pairs(num_neurons)
     pair_ids = np.arange(len(all_possible_pairs))
+    conn_ids = [0, 1, 2]
     network_sweep_size = len(pair_ids)
 
     assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2) # N(N-1) / 2
 
-    n_features_single = (2 * (num_neurons**2 - num_neurons)) + 2 # [err (1), Gg (N^2), Gs (N^2), pair_2b_modified_id (1)]
+    n_features_single = (2 * (num_neurons**2 - num_neurons)) + (2 * len(m1_target)) + 2 # [err (2 x len(m1_target)), Gg (N^2), Gs (N^2), pair_2b_modified_id (1), conn_id (1)]
 
-    n_actions = num_modifiable_weights**(len(del_W_space))
+    n_actions = (len(del_W_space)**num_modifiable_weights)
     n_features =  n_features_single * batchsize 
+
+    update_frequency = network_sweep_size * len(conn_ids)
 
     RL = ccd.DeepQNetwork(n_actions, n_features)
 
     err_list = []
+    err_flat_list = []
     Gg_list = []
     Gs_list = []
     modified_pair_ids = []
+    modified_conn_ids = []
+    action_list = []
     reward_list = []
 
     periodic_plotting_bool = True
 
-    init_err = utils.compute_score(Gg_init, Gs_init, E, 
+    init_err_flat, init_err = utils.compute_score(Gg_init, Gs_init, E, 
                                             input_vec, ablation_mask, 
                                             tf, t_delta, cutoff_1, cutoff_2,
                                             m1_target = m1_target,
                                             m2_target = m2_target,
                                             plot_result = periodic_plotting_bool,
-                                            verbose = True)[1]
+                                            verbose = True)[:2]
 
-    err_list.append(init_err)
     Gg_list.append(Gg_init)
     Gs_list.append(Gs_init)
+    err_list.append(init_err)
+    err_flat_list.append(init_err_flat)
 
     print("Initialization Complete")
 
@@ -101,130 +104,212 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
 
             for pair_id in pair_ids:
 
-                if k < batchsize: #k = 0,1,2
+                for conn_id in conn_ids:
 
-                    modified_pair_ids.append(pair_id)
+                    if k < batchsize: #k = 0,1,2
 
-                    random_action_ind = np.random.randint(0, len(action_2_conn_space), 1)[0]
-                    action = action_2_conn_space[random_action_ind]
+                        # Choose action ################################################################
 
-                    neuron_from = all_possible_pairs[pair_id][0]
-                    neuron_to = all_possible_pairs[pair_id][1]
+                        modified_pair_ids.append(pair_id)
+                        modified_conn_ids.append(conn_id)
 
-                    Gg_latest = Gg_list[-1].copy()
-                    Gs_latest = Gs_list[-1].copy()
+                        random_action_ind = np.random.randint(0, len(action_2_conn_space), 1)[0]
+                        action = action_2_conn_space[random_action_ind]
 
-                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
-                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+                        neuron_from = all_possible_pairs[pair_id][0]
+                        neuron_to = all_possible_pairs[pair_id][1]
 
-                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
-                                            input_vec, ablation_mask, 
-                                            tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = m1_target,
-                                            m2_target = m2_target,
-                                            plot_result = False,
-                                            verbose = True)[0]
+                        # Update Connectomes ################################################################
 
-                    err_list.append(new_err)
-                    Gg_list.append(updated_Gg)
-                    Gs_list.append(updated_Gs)
+                        Gg_latest = Gg_list[-1].copy()
+                        Gs_latest = Gs_list[-1].copy()
 
-                elif k == batchsize: #k = 3
+                        if conn_id == 0: #update gap
 
-                    modified_pair_ids.append(pair_id)
+                            updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                            updated_Gs = Gs_latest.copy()
 
-                    observation, newest_err_diff = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                        elif conn_id == 1: #update syn outgoing
 
-                    rl_action_ind = RL.choose_action(observation)
-                    action = action_2_conn_space[rl_action_ind]
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[0], None, weight_min, weight_max, 'outgoing')
 
-                    neuron_from = all_possible_pairs[pair_id][0]
-                    neuron_to = all_possible_pairs[pair_id][1]
+                        elif conn_id == 2: #update syn incoming
 
-                    Gg_latest = Gg_list[-1].copy()
-                    Gs_latest = Gs_list[-1].copy()
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, None, action[0], weight_min, weight_max, 'incoming')
 
-                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
-                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+                        # Compute Errors ################################################################
 
-                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
-                                            input_vec, ablation_mask, 
-                                            tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = m1_target,
-                                            m2_target = m2_target,
-                                            plot_result = False,
-                                            verbose = True)[0]
+                        new_err_flat, mean_error_dist = utils.compute_score(updated_Gg, updated_Gs, E, 
+                                                input_vec, ablation_mask, 
+                                                tf, t_delta, cutoff_1, cutoff_2,
+                                                m1_target = m1_target,
+                                                m2_target = m2_target,
+                                                plot_result = False,
+                                                verbose = True)[:2]
 
-                    err_list.append(new_err)
-                    Gg_list.append(updated_Gg)
-                    Gs_list.append(updated_Gs)
+                        # Save the data #################################################################
 
-                else: #k > 3
+                        action_list.append(random_action_ind)
+                        Gg_list.append(updated_Gg)
+                        Gs_list.append(updated_Gs)
+                        err_flat_list.append(new_err_flat)
+                        err_list.append(mean_error_dist)
 
-                    modified_pair_ids.append(pair_id)
+                    elif k == batchsize: #k = 3
 
-                    observation_, newest_err_diff_ = compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize)
+                        # Choose action (initial action by RL agent) ################################################################
 
-                    reward = compute_reward(newest_err_diff_, reward_type = 'delta_norm_tanh')
-                    #reward = compute_reward(err_list[-1], reward_type = 'asymptotic')
-                    reward_list.append(reward)
+                        modified_pair_ids.append(pair_id)
+                        modified_conn_ids.append(conn_id)
 
-                    RL.store_transition(observation, rl_action_ind, reward, observation_)
+                        observation, newest_err_diff = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize)
 
-                    observation = observation_.copy()
-                    newest_err_diff = newest_err_diff_.copy()
+                        rl_action_ind = RL.choose_action(observation)
+                        action = action_2_conn_space[rl_action_ind]
 
-                    rl_action_ind = RL.choose_action(observation)
-                    action = action_2_conn_space[rl_action_ind]
-                    
-                    neuron_from = all_possible_pairs[pair_id][0]
-                    neuron_to = all_possible_pairs[pair_id][1]
+                        neuron_from = all_possible_pairs[pair_id][0]
+                        neuron_to = all_possible_pairs[pair_id][1]
 
-                    Gg_latest = Gg_list[-1].copy()
-                    Gs_latest = Gs_list[-1].copy()
+                        # Update Connectomes ################################################################
 
-                    updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
-                    updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[1], action[2], weight_min, weight_max)
+                        Gg_latest = Gg_list[-1].copy()
+                        Gs_latest = Gs_list[-1].copy()
 
-                    if k % plotting_period == 0:
+                        if conn_id == 0: #update gap
 
-                        periodic_plotting_bool = True
+                            updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                            updated_Gs = Gs_latest.copy()
 
-                    else:
+                        elif conn_id == 1: #update syn outgoing
 
-                        periodic_plotting_bool = False
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[0], None, weight_min, weight_max, 'outgoing')
 
-                    new_err = utils.compute_score(updated_Gg, updated_Gs, E, 
-                                            input_vec, ablation_mask, 
-                                            tf, t_delta, cutoff_1, cutoff_2,
-                                            m1_target = m1_target,
-                                            m2_target = m2_target,
-                                            plot_result = periodic_plotting_bool,
-                                            verbose = True)[0]
+                        elif conn_id == 2: #update syn incoming
 
-                    err_list.append(new_err)
-                    Gg_list.append(updated_Gg)
-                    Gs_list.append(updated_Gs)
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, None, action[0], weight_min, weight_max, 'incoming')
 
-                if k > batchsize and k % update_frequency == 0:
-              
-                        RL.learn()
+                        # Compute Errors ################################################################
 
-                k += 1
+                        new_err_flat, mean_error_dist = utils.compute_score(updated_Gg, updated_Gs, E, 
+                                                input_vec, ablation_mask, 
+                                                tf, t_delta, cutoff_1, cutoff_2,
+                                                m1_target = m1_target,
+                                                m2_target = m2_target,
+                                                plot_result = False,
+                                                verbose = True)[:2]
 
-                if k % 300 == 1:
+                        # Save the data #################################################################
 
-                    print("Gg :" + str(Gg_list[-1]))
-                    print("Gs :" + str(Gs_list[-1]))
+                        action_list.append(rl_action_ind)
+                        Gg_list.append(updated_Gg)
+                        Gs_list.append(updated_Gs)
+                        err_flat_list.append(new_err_flat)
+                        err_list.append(mean_error_dist)
+
+                    else: #k > 3
+
+                        # Append pair to be modified ############################################################################
+
+                        modified_pair_ids.append(pair_id)
+                        modified_conn_ids.append(conn_id)
+
+                        # Identify the new state / reward from the last action ################################################################
+
+                        observation_, newest_err_diff_ = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize)
+
+                        reward = compute_reward(newest_err_diff_, reward_type = 'binomial')
+                        #reward = compute_reward(err_list[-1], reward_type = 'asymptotic')
+                        reward_list.append(reward)
+
+                        # Store the transition data ################################################################
+
+                        RL.store_transition(observation, rl_action_ind, reward, observation_)
+
+                        observation = observation_.copy()
+                        newest_err_diff = newest_err_diff_.copy()
+
+                        # Choose new action (continued action by RL agent) ################################################################
+
+                        rl_action_ind = RL.choose_action(observation)
+                        action = action_2_conn_space[rl_action_ind]
+                        
+                        neuron_from = all_possible_pairs[pair_id][0]
+                        neuron_to = all_possible_pairs[pair_id][1]
+
+                        # Update Connectomes ################################################################
+
+                        Gg_latest = Gg_list[-1].copy()
+                        Gs_latest = Gs_list[-1].copy()
+
+                        if conn_id == 0: #update gap
+
+                            updated_Gg = utils.update_weight_gap(Gg_latest, neuron_from, neuron_to, action[0], weight_min, weight_max)
+                            updated_Gs = Gs_latest.copy()
+
+                        elif conn_id == 1: #update syn outgoing
+
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, action[0], None, weight_min, weight_max, 'outgoing')
+
+                        elif conn_id == 2: #update syn incoming
+
+                            updated_Gg = Gg_latest.copy()
+                            updated_Gs = utils.update_weight_syn(Gs_latest, neuron_from, neuron_to, None, action[0], weight_min, weight_max, 'incoming')
+
+                        if k % plotting_period == 0:
+
+                            periodic_plotting_bool = True
+
+                        else:
+
+                            periodic_plotting_bool = False
+
+                        # Compute Errors ################################################################
+
+                        new_err_flat, mean_error_dist = utils.compute_score(updated_Gg, updated_Gs, E, 
+                                                input_vec, ablation_mask, 
+                                                tf, t_delta, cutoff_1, cutoff_2,
+                                                m1_target = m1_target,
+                                                m2_target = m2_target,
+                                                plot_result = periodic_plotting_bool,
+                                                verbose = True)[:2]
+
+                        # Save the data #################################################################
+
+                        action_list.append(rl_action_ind)
+                        Gg_list.append(updated_Gg)
+                        Gs_list.append(updated_Gs)
+                        err_flat_list.append(new_err_flat)
+                        err_list.append(mean_error_dist)
+
+                    if k > batchsize and k % update_frequency == 0:
+                  
+                            RL.learn()
+
+                    k += 1
+
+                    if k % 300 == 1:
+
+                        print("Gg :" + str(Gg_list[-1]))
+                        print("Gs :" + str(Gs_list[-1]))
+                        print("reward :" + str(np.sum(reward_list[-300:])) )
+                        RL.plot_cost()
 
             print("error: " + str(err_list[-1]))
 
     training_result = {
 
+    "action_list" : action_list,
+    "err_flat_list" : err_flat_list,
     "err_list" : err_list,
     "Gg_list" : Gg_list,
     "Gs_list" : Gs_list,
     "modified_pair_ids" : modified_pair_ids,
+    "modified_conn_ids" : modified_conn_ids,
     "reward_list" : reward_list,
     "E" : E
     
@@ -487,29 +572,31 @@ def produce_lowdim_traj(v_solution, dim_num):
 
 ###################################################################################
 
-def compute_batch_state(err_list, Gg_list, Gs_list, modified_pair_ids, batchsize):
+def compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize):
 
-    err_batch = err_list[-batchsize:]
+    err_batch = err_flat_list[-batchsize:]
     Gg_batch = Gg_list[-batchsize:]
     Gs_batch = Gs_list[-batchsize:]
     pair_ids_batch = modified_pair_ids[-batchsize:]
+    conn_ids_batch = modified_conn_ids[-batchsize:]
 
-    newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative error, if negative, positive error
+    newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative reward, if negative, positive reward
     #print(newest_err_diff)
 
     batch_states = []
 
     for k in range(batchsize):
 
-        err_k = err_list[k]
+        err_k = err_flat_list[k]
         Gg_flat_k = utils.convert_conn_2_vec(Gg_batch[k])
         Gs_flat_k = utils.convert_conn_2_vec(Gs_batch[k])
         pair_id_k = pair_ids_batch[k]
+        conn_id_k = conn_ids_batch[k]
 
-        batch_states.append(np.hstack([err_k, Gg_flat_k, Gs_flat_k, pair_id_k]))
+        batch_states.append(np.hstack([err_k, Gg_flat_k, Gs_flat_k, pair_id_k, conn_id_k]))
 
     batch_state_vec = np.hstack(batch_states)
-    #print(batch_state_vec.shape)
+    #print(batch_state_vec)
 
     return batch_state_vec, newest_err_diff
 
@@ -520,6 +607,10 @@ def compute_reward(reward_param, reward_type):
         if reward_param < 0:
 
             reward = 1
+
+        elif reward_param == 0:
+
+            reward = 0
 
         else:
 
@@ -595,16 +686,3 @@ def compute_jacobian_constinput(t, y):
     J = np.vstack((J_row1, J_row2))
 
     return J
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -118,46 +118,69 @@ def update_weight_gap(Gg, neuron_from, neuron_to, action_bidirectional, weight_m
 
     new_weight = Gg[neuron_from, neuron_to] + action_bidirectional
 
-    if new_weight < weight_min:
-
-        new_weight = weight_min
-
-    elif new_weight > weight_max:
-
-        new_weight = weight_max
+    new_weight = filter_weight(new_weight, weight_min, weight_max)
 
     updated_Gg[neuron_from, neuron_to] = new_weight
     updated_Gg[neuron_to, neuron_from] = new_weight
 
     return updated_Gg   
 
-def update_weight_syn(Gs, neuron_from, neuron_to, action_ougoing, action_incoming, weight_min, weight_max):
+def update_weight_syn(Gs, neuron_from, neuron_to, action_outgoing, action_incoming, weight_min, weight_max, update_method):
 
     updated_Gs = Gs.copy()
 
-    new_weight_outgoing = Gs[neuron_from, neuron_to] + action_ougoing
-    new_weight_incoming = Gs[neuron_to, neuron_from] + action_incoming
+    if update_method == 'both':
 
-    if new_weight_outgoing < weight_min:
+        new_weight_outgoing = Gs[neuron_from, neuron_to] + action_outgoing
+        new_weight_incoming = Gs[neuron_to, neuron_from] + action_incoming
 
-        new_weight_outgoing = weight_min
+        new_weight_outgoing = filter_weight(new_weight_outgoing, weight_min, weight_max)
+        new_weight_incoming = filter_weight(new_weight_incoming, weight_min, weight_max)
 
-    elif new_weight_outgoing > weight_max:
+        updated_Gs[neuron_from, neuron_to] = new_weight_outgoing
+        updated_Gs[neuron_to, neuron_from] = new_weight_incoming
 
-        new_weight_outgoing = weight_max
+        return updated_Gs
 
-    if new_weight_incoming < weight_min:
+    elif update_method == 'outgoing':
 
-        new_weight_incoming = weight_min
+        new_weight_outgoing = Gs[neuron_from, neuron_to] + action_outgoing
 
-    elif new_weight_incoming > weight_max:
+        new_weight_outgoing = filter_weight(new_weight_outgoing, weight_min, weight_max)
 
-        new_weight_incoming = weight_max
+        updated_Gs[neuron_from, neuron_to] = new_weight_outgoing
 
-    updated_Gs[neuron_from, neuron_to] = new_weight_outgoing
-    updated_Gs[neuron_to, neuron_from] = new_weight_incoming
+        return updated_Gs
 
-    return updated_Gs
+    elif update_method == 'incoming':
+
+        new_weight_incoming = Gs[neuron_to, neuron_from] + action_incoming
+
+        new_weight_incoming = filter_weight(new_weight_incoming, weight_min, weight_max)
+
+        updated_Gs[neuron_to, neuron_from] = new_weight_incoming
+
+        return updated_Gs
+
+def filter_weight(new_weight, weight_min, weight_max):
+
+    if new_weight < weight_min:
+
+        return weight_min
+
+    elif new_weight > weight_max:
+
+        return weight_max
+
+    else:
+
+        return new_weight
+
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0: 
+       return v
+    return v / norm
 
 def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
     """
@@ -225,14 +248,38 @@ def compute_score(Gg, Gs, E,
 
     # Compute the error
 
-    m1_diff = np.subtract(m1_target, m1_test)
-    m2_diff = np.subtract(m2_target, m2_test)
+    target_dist_ref = np.linalg.norm(np.vstack([m1_target, m2_target]))
+    target_vel_ref = np.linalg.norm(np.vstack([np.diff(m1_target), np.diff(m2_target)]))
+    target_volume = np.sqrt(np.power(np.vstack([m1_target, m2_target]), 2).sum(axis = 0)).sum()
+    test_volume = np.sqrt(np.power(np.vstack([m1_test, m2_test]), 2).sum(axis = 0)).sum()
 
-    m_joined = np.vstack([m1_diff, m2_diff])
-    errors = np.sqrt(np.power(m_joined, 2).sum(axis = 0))
+    m1_diff_dist = np.subtract(m1_target, m1_test)
+    m2_diff_dist = np.subtract(m2_target, m2_test)
 
-    mean_error = np.mean(errors)
-    sum_error = np.sum(errors)
+    #m1_diff_vel = np.subtract(np.diff(m1_target), np.diff(m1_test))
+    #m2_diff_vel = np.subtract(np.diff(m2_target), np.diff(m2_test))
+
+    #m_joined_dist = np.vstack([m1_diff_dist, m2_diff_dist])
+    #errors_dist = np.sqrt(np.power(m_joined_dist, 2).sum(axis = 0))
+
+    #m_joined_vel = np.vstack([m1_diff_vel, m2_diff_vel])
+    #errors_vel = np.sqrt(np.power(m_joined_vel, 2).sum(axis = 0))
+
+    #mean_error_dist = np.mean(errors_dist)
+    #sum_error_dist = np.sum(errors_dist)
+
+    volume_ratio = test_volume / target_volume
+    volume_deviation_err = np.cosh(7 * (-1 + volume_ratio)) - 1
+
+    error_frobenius_dist = np.linalg.norm(np.subtract(np.vstack([m1_target, m2_target]), np.vstack([m1_test, m2_test])))
+    error_frobenius_vel = np.linalg.norm(np.subtract(np.vstack([np.diff(m1_target), np.diff(m2_target)]), np.vstack([np.diff(m1_test), np.diff(m2_test)])))
+    error_frobenius = (1/3) * (error_frobenius_dist / target_dist_ref) + (1/3) * (error_frobenius_vel / target_vel_ref) + (1/3) * volume_deviation_err
+
+    #mean_error_vel = np.mean(errors_vel)
+    #sum_error_vel = np.sum(errors_vel)
+
+    error_dist_flattened = np.hstack([m1_diff_dist, m2_diff_dist])
+    #error_vel_flattened = np.hstack([m1_diff_vel, m2_diff_vel])
 
     # Plot the target vs test
 
@@ -243,7 +290,7 @@ def compute_score(Gg, Gs, E,
         plt.scatter(m1_target, m2_target, s = 0.75, color = 'black')
         plt.scatter(m1_test, m2_test, s = 0.75, color = 'red')
 
-        plt.ylim(-25, 25)
-        plt.xlim(-25, 25)
+        plt.ylim(-45, 45)
+        plt.xlim(-45, 45)
 
-    return mean_error, sum_error, m1_test, m2_test
+    return error_dist_flattened, error_frobenius, m1_test, m2_test
