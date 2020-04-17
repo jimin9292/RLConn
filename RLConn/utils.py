@@ -182,6 +182,12 @@ def normalize(v):
        return v
     return v / norm
 
+def centeroidnp(arr):
+    length = arr.shape[0]
+    sum_x = np.sum(arr[:, 0])
+    sum_y = np.sum(arr[:, 1])
+    return np.asarray([sum_x/length, sum_y/length])
+
 def compute_problem_score(Gg, Gs, problem_definition, verbose=True):
     """
     Example usage:
@@ -250,8 +256,16 @@ def compute_score(Gg, Gs, E,
 
     target_dist_ref = np.linalg.norm(np.vstack([m1_target, m2_target]))
     target_vel_ref = np.linalg.norm(np.vstack([np.diff(m1_target), np.diff(m2_target)]))
-    target_volume = np.sqrt(np.power(np.vstack([m1_target, m2_target]), 2).sum(axis = 0)).sum()
-    test_volume = np.sqrt(np.power(np.vstack([m1_test, m2_test]), 2).sum(axis = 0)).sum()
+
+    #target_volume = np.sqrt(np.power(np.vstack([m1_target, m2_target]), 2).sum(axis = 0)).sum()
+    target_centroid = centeroidnp(np.vstack([m1_target, m2_target]))
+    target_centroid_tile = np.tile(target_centroid[:, np.newaxis], (1, len(m1_target)))
+    target_volume = np.sqrt(np.power(np.subtract(np.vstack([m1_target, m2_target]), target_centroid_tile), 2).sum(axis = 0)).sum()
+
+    #test_volume = np.sqrt(np.power(np.vstack([m1_test, m2_test]), 2).sum(axis = 0)).sum()
+    test_centroid = centeroidnp(np.vstack([m1_test, m2_test]))
+    test_centroid_tile = np.tile(test_centroid[:, np.newaxis], (1, len(m1_test)))
+    test_volume = np.sqrt(np.power(np.subtract(np.vstack([m1_test, m2_test]), test_centroid_tile), 2).sum(axis = 0)).sum()
 
     m1_diff_dist = np.subtract(m1_target, m1_test)
     m2_diff_dist = np.subtract(m2_target, m2_test)

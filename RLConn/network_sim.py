@@ -23,7 +23,7 @@ action_2_conn_space = utils.compute_action_combinations(del_W_space, num_modifia
 
 positive_reward_droprate = 1e-5
 negative_reward_coeff = 5e-2
-delta_norm_const = 0.1
+delta_norm_const = 0.005
 
 # Default
 # lr = 0.01
@@ -221,7 +221,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
 
                         observation_, newest_err_diff_ = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize)
 
-                        reward = compute_reward(newest_err_diff_, reward_type = 'binomial')
+                        reward = compute_reward(newest_err_diff_, reward_type = 'delta_norm_tanh')
                         #reward = compute_reward(err_list[-1], reward_type = 'asymptotic')
                         reward_list.append(reward)
 
