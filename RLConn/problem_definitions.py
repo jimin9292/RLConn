@@ -47,7 +47,7 @@ FOUR_NEURON_OSCILLATION = ProblemDefinition(
     input_vec =  input_vec
 )
 
-def get_three_neuron_oscillation_definition():
+def get_three_neuron_oscillation_definition(noise_vec):
     N = 3
     Gg = np.array([[0, 8, 5],
                    [8, 0, 2],
@@ -94,8 +94,11 @@ def get_three_neuron_oscillation_definition():
 
     # Set initial guess to be around the true parameter values, but with noise.
     np.random.seed(2)
-    init_compact_vec = [8, 5, 2, 7, 7, 7, 2, 8, 3]
-    init_compact_vec += np.random.rand(len(init_compact_vec))
+    init_compact_vec = np.array([8, 5, 2, 7, 7, 7, 2, 8, 3])
+    init_compact_vec = init_compact_vec.astype(float)
+    # init_compact_vec += np.random.rand(len(init_compact_vec))
+    # init_compact_vec += np.random.randint(-1, 1, len(init_compact_vec))
+    init_compact_vec += noise_vec
     init_Gg, init_Gs = connectomes.compact_to_model_param(init_compact_vec, N)
 
     return ProblemDefinition(
