@@ -57,6 +57,12 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
     conn_ids = [0, 1, 2]
     network_sweep_size = len(pair_ids)
 
+    full_network = np.ones(Gg_init.shape) * weight_max
+    np.fill_diagonal(full_network, 0)
+
+    empty_network = np.ones(Gg_init.shape) * weight_min
+    np.fill_diagonal(empty_network, 0)
+
     assert network_sweep_size == ((num_neurons * (num_neurons - 1)) / 2) # N(N-1) / 2
 
     n_features_single = (2 * (num_neurons**2 - num_neurons)) + (2 * len(m1_target)) + 2 # [err (2 x len(m1_target)), Gg (N^2), Gs (N^2), pair_2b_modified_id (1), conn_id (1)]
@@ -64,7 +70,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
     n_actions = (len(del_W_space)**num_modifiable_weights)
     n_features =  n_features_single * batchsize 
 
-    update_frequency = network_sweep_size * len(conn_ids)
+    update_frequency = 9
 
     RL = ccd.DeepQNetwork(n_actions, n_features)
 
@@ -99,6 +105,8 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
         k = 0
 
         for epoch in range(num_epochs):
+
+            print(epoch)
 
             # NETWORK SWEEP
 
@@ -164,7 +172,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                         modified_pair_ids.append(pair_id)
                         modified_conn_ids.append(conn_id)
 
-                        observation, newest_err_diff = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize)
+                        observation, newest_err_diff = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, full_network, empty_network, batchsize)
 
                         rl_action_ind = RL.choose_action(observation)
                         action = action_2_conn_space[rl_action_ind]
@@ -219,9 +227,16 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
 
                         # Identify the new state / reward from the last action ################################################################
 
-                        observation_, newest_err_diff_ = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize)
+                        observation_, newest_err_diff_ = compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, full_network, empty_network, batchsize)
 
-                        reward = compute_reward(newest_err_diff_, reward_type = 'delta_norm_tanh')
+                        if newest_err_diff_ == 'boundary':
+
+                            reward = -100
+
+                        else:
+
+                            reward = compute_reward(newest_err_diff_, reward_type = 'delta_norm_tanh')
+
                         #reward = compute_reward(err_list[-1], reward_type = 'asymptotic')
                         reward_list.append(reward)
 
@@ -230,7 +245,7 @@ def train_network(network_dict_init, external_params_dict, m1_target, m2_target,
                         RL.store_transition(observation, rl_action_ind, reward, observation_)
 
                         observation = observation_.copy()
-                        newest_err_diff = newest_err_diff_.copy()
+                        #newest_err_diff = newest_err_diff_.copy()
 
                         # Choose new action (continued action by RL agent) ################################################################
 
@@ -572,7 +587,7 @@ def produce_lowdim_traj(v_solution, dim_num):
 
 ###################################################################################
 
-def compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, batchsize):
+def compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair_ids, modified_conn_ids, full_network, empty_network, batchsize):
 
     err_batch = err_flat_list[-batchsize:]
     Gg_batch = Gg_list[-batchsize:]
@@ -580,7 +595,21 @@ def compute_batch_state(err_flat_list, err_list, Gg_list, Gs_list, modified_pair
     pair_ids_batch = modified_pair_ids[-batchsize:]
     conn_ids_batch = modified_conn_ids[-batchsize:]
 
-    newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative reward, if negative, positive reward
+    num_neurons = len(Gs_list[-1])
+
+    Gs_is_full = np.sum(Gs_list[-1] == full_network) == num_neurons**2
+    Gg_is_full = np.sum(Gg_list[-1] == full_network) == num_neurons**2
+    Gs_is_empty = np.sum(Gs_list[-1] == empty_network) == num_neurons**2
+    Gg_is_empty = np.sum(Gg_list[-1] == empty_network) == num_neurons**2
+
+    if np.sum([Gs_is_full, Gg_is_full, Gs_is_empty, Gg_is_empty]) != 0:
+
+        newest_err_diff = 'boundary'
+
+    else:
+
+        newest_err_diff = err_list[-1] - err_list[-2] #if positive, negative reward, if negative, positive reward
+    
     #print(newest_err_diff)
 
     batch_states = []
